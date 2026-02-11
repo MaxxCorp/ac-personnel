@@ -1,5 +1,5 @@
 <script module lang="ts">
-    import { uploadDocument } from "../../../routes/api/documents.remote";
+    import { uploadEntityDocument } from "../../../routes/api/documents.remote";
 </script>
 
 <script lang="ts">
@@ -41,15 +41,16 @@
         uploading = true;
 
         try {
-            await import("../../../routes/api/documents.remote").then((m) =>
-                (m as any).uploadDocument(
-                    entityType,
-                    entityId,
-                    file,
-                    type,
-                    branch,
-                ),
-            );
+            const formData = new FormData();
+            formData.append("entityType", entityType);
+            formData.append("entityId", entityId.toString());
+            formData.append("file", file);
+            formData.append("type", type);
+            formData.append("branch", branch);
+
+            // @ts-ignore
+            await uploadEntityDocument(formData);
+
             onUploadComplete();
             file = null;
         } catch (e: any) {
@@ -99,25 +100,7 @@
         </p>
     </div>
 
-    <Button
-        disabled={!file || uploading}
-        onclick={() => {
-            if (!file) return;
-            uploading = true;
-            // @ts-ignore
-            uploadDocument(entityType, entityId, file, type, branch)
-                .then(() => {
-                    onUploadComplete();
-                    file = null;
-                })
-                .catch((e: any) => {
-                    alert("Upload failed: " + e.message);
-                })
-                .finally(() => {
-                    uploading = false;
-                });
-        }}
-    >
+    <Button disabled={!file || uploading} onclick={handleUpload}>
         {#if uploading}
             Uploading...
         {:else}

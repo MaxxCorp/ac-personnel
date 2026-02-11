@@ -21,3 +21,18 @@ You MUST use this tool whenever writing Svelte code before sending it to the use
 
 Generates a Svelte Playground link with the provided code.
 After completing the code, ask the user if they want a playground link. Only call this tool after user confirmation and NEVER if code was written to files in their project.
+
+### 5. Backend Interactions Standard
+
+- **Remote Functions Only**: ALL backend interactions MUST be implemented as remote functions in `*.remote.ts`.
+- **Wrappers Required**: You MUST use `query`, `command`, or `form` wrappers exported from `@sveltejs/kit` (or `$app/server` if documented).
+    -   Example: `export const myAction = command(async () => { ... })`
+- **Context Access**: Do NOT add `event` as an argument. Use `getRequestEvent()` from `@sveltejs/kit` to access the request context.
+- **Argument Handling**: If validation libraries (Zod/Valibot) are NOT present, `command`/`query` functions should take NO arguments (or carefully typed ones if supported). Prefer reading data via `getRequestEvent().request.formData()` or `.json()` manually if necessary.
+- **No Load Functions**: Do NOT use `+page.server.ts` `load`.
+- **No Form Actions**: Do NOT use SvelteKit Form Actions.
+
+### 6. Svelte 5 & SvelteKit 2 Compliance
+
+- **No `$effect` for State Sync**: Do NOT use `$effect` to synchronize state (e.g. `let b = $state(); $effect(() => b = a * 2)`). Use `$derived` instead.
+- **No Throwing Redirects**: In SvelteKit 2, `redirect(...)` and `error(...)` are NOT thrown. Call them directly: `redirect(302, '/')`.

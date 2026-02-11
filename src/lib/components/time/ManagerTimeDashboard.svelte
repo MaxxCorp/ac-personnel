@@ -7,7 +7,7 @@
         getPendingAbsenceRequests,
         updateAbsenceStatus,
     } from "../../../routes/api/absences.remote";
-    import { getEmployees } from "../../../routes/api/employees.remote";
+    import { getAllEmployees } from "../../../routes/api/employees.remote";
     import { onMount } from "svelte";
     import * as Card from "$lib/components/ui/card";
     import { Button } from "$lib/components/ui/button";
@@ -24,7 +24,7 @@
         ReturnType<typeof getPendingAbsenceRequests>
     >[number];
     // @ts-ignore
-    type Employee = Awaited<ReturnType<typeof getEmployees>>[number];
+    type Employee = Awaited<ReturnType<typeof getAllEmployees>>[number];
 
     let timeEntries: TimeEntry[] = $state([]);
     let absences: Absence[] = $state([]);
@@ -49,7 +49,7 @@
                 // @ts-ignore
                 getPendingAbsenceRequests(),
                 // @ts-ignore
-                getEmployees(),
+                getAllEmployees(),
             ]);
             timeEntries = t;
             absences = a;

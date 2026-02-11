@@ -2,32 +2,34 @@ import { db } from '$lib/server/db';
 import { documents, documentVersions, type DocumentType, type EntityType } from '$lib/server/db/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { auth } from '$lib/server/auth';
-import type { RequestEvent } from '@sveltejs/kit';
 import { getStorageAdapter } from '$lib/server/storage';
+import { query, command } from '$app/server';
+import { getRequestEvent } from '$app/server';
 
-export async function uploadDocument(
-    event: RequestEvent,
-    entityType: EntityType,
-    entityId: number,
-    file: File,
-    type: DocumentType,
-    branch: string = 'main',
-    documentId?: number // If providing an ID, we are updating/versioning an existing doc
-) {
+export const uploadEntityDocument = command(async () => {
+    const event = getRequestEvent();
+    if (!event) throw new Error('No request event');
+
     const session = await auth.api.getSession({ headers: event.request.headers });
     if (!session) throw new Error('Unauthorized');
 
-    // Authorization Check
-    // If updating existing doc, check if user can modify that doc (or entity owning it)
-    // If creating new doc, check if user can upload to that entity
-    // Strict rule: Applicants/Employees can upload (if they are the entity)
+    // Parse FormData manually since we aren't using a schema lib yet
+    const formData = await event.request.formData();
+    const entityType = formData.get('entityType') as EntityType;
+    const entityId = Number(formData.get('entityId'));
+    const file = formData.get('file') as File;
+    const type = formData.get('type') as DocumentType;
+    const branch = (formData.get('branch') as string) || 'main';
+    const documentId = formData.get('documentId') ? Number(formData.get('documentId')) : undefined;
+
+    if (!file || !entityType || !entityId) {
+        throw new Error('Missing required fields');
+    }
 
     const role = session.user.role || '';
     if (['applicant', 'employee'].includes(role)) {
         // Must be the owner to upload/update
         // Simplified check: If entityId matches user's associated applicant/employee ID.
-        // For now, assuming middleware/frontend handles passing correct IDs and we trust the session matches.
-        // Ideally: verify session.user.id is linked to entityId.
     } else if (!['admin', 'leadership', 'talentManagement', 'hiringManager'].includes(role)) {
         throw new Error('Unauthorized');
     }
@@ -82,18 +84,28 @@ export async function uploadDocument(
 
         return { documentId: docId, version: newVersion };
     });
-}
+});
 
-export async function getDocuments(event: RequestEvent, entityType: EntityType, entityId: number) {
+export const getEntityDocuments = query(async () => {
+    const event = getRequestEvent();
+    if (!event) throw new Error('No request event');
+
+    // Parse query params manually
+    // Using event.url.searchParams for query args
+    const entityType = event.url.searchParams.get('entityType') as EntityType;
+    const entityId = Number(event.url.searchParams.get('entityId'));
+
+    if (!entityType || !entityId) {
+        // Return empty or throw? throw for now to see errors.
+        return [];
+    }
+
     const session = await auth.api.getSession({ headers: event.request.headers });
     if (!session) throw new Error('Unauthorized');
 
     // Get all docs
     const docs = await db.select().from(documents)
         .where(and(eq(documents.entityType, entityType), eq(documents.entityId, entityId)));
-
-    // For each doc, get LATEST version of MAIN branch (or all branches? User said "support branches")
-    // Let's return the docs with their versions.
 
     const results = await Promise.all(docs.map(async (doc) => {
         const versions = await db.select().from(documentVersions)
@@ -107,9 +119,17 @@ export async function getDocuments(event: RequestEvent, entityType: EntityType, 
     }));
 
     return results;
-}
+});
 
-export async function deleteDocument(event: RequestEvent, id: number) {
+export const deleteEntityDocument = command(async () => {
+    const event = getRequestEvent();
+    if (!event) throw new Error('No request event');
+
+    const formData = await event.request.formData();
+    const id = Number(formData.get('id'));
+
+    if (!id) throw new Error('Missing document ID');
+
     const session = await auth.api.getSession({ headers: event.request.headers });
     if (!session) throw new Error('Unauthorized');
 
@@ -123,17 +143,11 @@ export async function deleteDocument(event: RequestEvent, id: number) {
 
     const adapter = getStorageAdapter();
     for (const v of versions) {
-        // Only delete from storage if usage matches current provider? 
-        // Or if we have a way to handle multi-provider legacy.
-        // Schema has `storageProvider`.
-        // Ideally we'd instantiate the correct adapter for that version.
-        // For now, assume consistent provider or handle error gracefully.
         if (v.storageProvider === (process.env.NODE_ENV === 'production' ? 'vercel-blob' : 'local')) {
             await adapter.delete(v.storagePath);
         }
     }
 
-    // 2. Cascade delete in DB (Document delete triggers version delete via FK if configured, else manual)
-    // We configured `onDelete: 'cascade'` in schema, so deleting parent doc is enough.
+    // 2. Cascade delete in DB
     await db.delete(documents).where(eq(documents.id, id));
-}
+});

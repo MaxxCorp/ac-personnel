@@ -4,7 +4,7 @@
     import ManagerTimeDashboard from "$lib/components/time/ManagerTimeDashboard.svelte";
     import { page } from "$app/state";
     import * as Tabs from "$lib/components/ui/tabs";
-    import { getEmployees } from "../api/employees.remote";
+    import { getAllEmployees } from "../api/employees.remote";
 
     let { data } = $props();
     let user = $derived(data.session?.user);
@@ -29,7 +29,7 @@
         if (user) {
             // Fetch employee ID for current user
             // @ts-ignore
-            getEmployees()
+            getAllEmployees()
                 .then((emps) => {
                     // @ts-ignore
                     const match = emps.find((e) => e.userId === user.id);

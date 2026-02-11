@@ -1,7 +1,7 @@
 <script lang="ts">
     import {
-        getDocuments,
-        deleteDocument,
+        getEntityDocuments,
+        deleteEntityDocument,
     } from "../../../routes/api/documents.remote";
     import { onMount } from "svelte";
     import { Button } from "$lib/components/ui/button";
@@ -18,7 +18,7 @@
 
     // Types
     // @ts-ignore
-    type Document = Awaited<ReturnType<typeof getDocuments>>[number];
+    type Document = Awaited<ReturnType<typeof getEntityDocuments>>[number];
 
     let documents: Document[] = $state([]);
     let loading = $state(true);
@@ -28,7 +28,7 @@
         loading = true;
         try {
             // @ts-ignore
-            documents = await (getDocuments as any)(entityType, entityId);
+            documents = await (getEntityDocuments as any)(entityType, entityId);
         } catch (e: any) {
             error = e.message;
         } finally {
@@ -44,7 +44,7 @@
         if (!confirm("Are you sure? This will delete all versions.")) return;
         try {
             // @ts-ignore
-            await (deleteDocument as any)(id);
+            await (deleteEntityDocument as any)(id);
             await loadDocuments();
         } catch (e: any) {
             alert(e.message);

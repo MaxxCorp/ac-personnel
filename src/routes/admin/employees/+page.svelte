@@ -1,15 +1,24 @@
 <script lang="ts">
-    import { getEmployees } from "../../api/employees.remote";
+    import {
+        getAllEmployees,
+        createEmployee,
+    } from "../../api/employees.remote";
+    import { createEmployeeSchema, roleOptions } from "$lib/schemas";
     import { onMount } from "svelte";
     import * as Table from "$lib/components/ui/table";
     import { Button } from "$lib/components/ui/button";
+    import AsyncButton from "$lib/components/ui/button/AsyncButton.svelte";
     import * as Sheet from "$lib/components/ui/sheet";
     import DocumentManager from "$lib/components/documents/DocumentManager.svelte";
-    import { Eye } from "@lucide/svelte";
+    import { Eye, Plus } from "@lucide/svelte";
+    import { Input } from "$lib/components/ui/input";
+    import { Label } from "$lib/components/ui/label";
+    import * as Select from "$lib/components/ui/select";
+    import { toast } from "svelte-sonner";
 
     // Remote function type
     // @ts-ignore
-    type Employee = Awaited<ReturnType<typeof getEmployees>>[number];
+    type Employee = Awaited<ReturnType<typeof getAllEmployees>>[number];
 
     let employees: Employee[] = $state([]);
     let loading = $state(true);
@@ -24,19 +33,23 @@
     onMount(async () => {
         try {
             // @ts-ignore
-            employees = await getEmployees();
+            employees = await getAllEmployees();
         } catch (e) {
             console.error("Failed to load employees", e);
         } finally {
             loading = false;
         }
     });
+
+    let addSheetOpen = $state(false);
 </script>
 
 <div class="p-8">
     <div class="flex items-center justify-between mb-6">
         <h2 class="text-3xl font-bold tracking-tight">Employees</h2>
-        <Button>Add Employee</Button>
+        <Button onclick={() => (addSheetOpen = true)}>
+            <Plus class="mr-2 h-4 w-4" /> Add Employee
+        </Button>
     </div>
 
     {#if loading}
@@ -98,6 +111,7 @@
         </div>
     {/if}
 
+    <!-- Detail Sheet -->
     <Sheet.Root bind:open={sheetOpen}>
         <Sheet.Content class="w-[600px] sm:max-w-xl overflow-y-auto">
             <Sheet.Header>
@@ -107,7 +121,6 @@
                     {selectedEmployee?.lastName}
                 </Sheet.Description>
             </Sheet.Header>
-
             {#if selectedEmployee}
                 <div class="py-6">
                     <DocumentManager
@@ -116,6 +129,149 @@
                     />
                 </div>
             {/if}
+        </Sheet.Content>
+    </Sheet.Root>
+
+    <!-- Add Employee Sheet -->
+    <Sheet.Root bind:open={addSheetOpen}>
+        <Sheet.Content class="w-full sm:max-w-md p-6">
+            <Sheet.Header>
+                <Sheet.Title>Add New Employee</Sheet.Title>
+                <Sheet.Description>
+                    Create a new employee record.
+                </Sheet.Description>
+            </Sheet.Header>
+            <div class="grid gap-4 py-4">
+                <!-- @ts-ignore -->
+                <form
+                    {...createEmployee
+                        .preflight(createEmployeeSchema)
+                        .enhance(async ({ form, submit }) => {
+                            try {
+                                console.log("Submitting form...");
+                                // Use updates() to invalidate/refresh the getAllEmployees query
+                                // The result of updates() is the response from the server (often undefined or void if query refresh)
+                                // But createEmployee remote function returns the created employee or throws.
+
+                                // submit() resolves if the request completes, but might contain an error within the result wrapper if using remote functions?
+                                // Standard remote function usage:
+                                // await submit();
+                                // If failed, createEmployee.error would be set.
+
+                                await submit().updates(getAllEmployees);
+
+                                // Check for error AFTER submit
+                                // @ts-ignore
+                                if (createEmployee.error) {
+                                    // @ts-ignore
+                                    console.error(
+                                        "Form submission returned error state:",
+                                        createEmployee.error,
+                                    );
+                                    // @ts-ignore
+                                    throw new Error(
+                                        createEmployee.error.message ||
+                                            "Unknown error from server",
+                                    );
+                                }
+
+                                console.log(
+                                    "Form submitted, updates triggered. Checking result...",
+                                );
+                                // Also check if result exists?
+                                // createEmployee.result should be populated on success
+
+                                // @ts-ignore
+                                if (
+                                    !createEmployee.result &&
+                                    !createEmployee.error
+                                ) {
+                                    console.warn(
+                                        "No result and no error? Possibly void return or issue.",
+                                    );
+                                }
+
+                                toast.success("Employee created successfully");
+                                addSheetOpen = false;
+
+                                // Re-fetch employees to update the local state
+                                console.log("Re-fetching employees...");
+                                // @ts-ignore
+                                const res = await getAllEmployees();
+                                console.log(
+                                    "Employees re-fetched:",
+                                    res ? res.length : "null",
+                                );
+                                employees = res;
+
+                                form.reset();
+                            } catch (e: any) {
+                                console.error("Form submission error:", e);
+                                toast.error(
+                                    e.message || "Failed to create employee",
+                                );
+                            }
+                        })}
+                >
+                    <div class="grid gap-4">
+                        <div class="grid w-full items-center gap-1.5">
+                            <Label>First Name</Label>
+                            <Input
+                                placeholder="First Name"
+                                {...createEmployee.fields.firstName.as("text")}
+                            />
+                        </div>
+                        <div class="grid w-full items-center gap-1.5">
+                            <Label>Last Name</Label>
+                            <Input
+                                placeholder="Last Name"
+                                {...createEmployee.fields.lastName.as("text")}
+                            />
+                        </div>
+                        <div class="grid w-full items-center gap-1.5">
+                            <Label>Personal Email</Label>
+                            <Input
+                                placeholder="Email"
+                                {...createEmployee.fields.personalEmail.as(
+                                    "email",
+                                )}
+                            />
+                        </div>
+                        <div class="grid w-full items-center gap-1.5">
+                            <Label for="role">Role</Label>
+                            <select
+                                class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                                {...createEmployee.fields.role.as("select")}
+                            >
+                                {#each roleOptions as role}
+                                    <option value={role.value}
+                                        >{role.label}</option
+                                    >
+                                {/each}
+                            </select>
+                        </div>
+                        <div class="grid w-full items-center gap-1.5">
+                            <Label for="department">Department</Label>
+                            <Input
+                                placeholder="Department"
+                                {...createEmployee.fields.department.as("text")}
+                            />
+                        </div>
+
+                        <AsyncButton
+                            loading={createEmployee.pending}
+                            type="submit"
+                            class="mt-4"
+                            loadingLabel="Creating..."
+                        >
+                            Create Employee
+                        </AsyncButton>
+                    </div>
+                </form>
+            </div>
+            <Sheet.Footer>
+                <!-- Footer content if any -->
+            </Sheet.Footer>
         </Sheet.Content>
     </Sheet.Root>
 </div>

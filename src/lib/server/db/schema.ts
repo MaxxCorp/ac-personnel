@@ -1,5 +1,5 @@
 import { pgTable, serial, integer, text, timestamp, boolean } from 'drizzle-orm/pg-core';
-import { user } from './auth.schema';
+import { user } from './auth-schema';
 
 export const applicationStatus = [
 	'applied',
@@ -139,4 +139,4 @@ export const notifications = pgTable('notification', {
 
 
 
-export * from './auth.schema';
+export * from './auth-schema';
