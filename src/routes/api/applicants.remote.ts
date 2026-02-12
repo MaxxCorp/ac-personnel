@@ -24,6 +24,15 @@ export async function updateApplicantStatus(event: RequestEvent, id: number, sta
     return await db.update(applicants).set({ status }).where(eq(applicants.id, id)).returning();
 }
 
+export async function deleteApplicant(event: RequestEvent, id: number) {
+    const session = await auth.api.getSession({ headers: event.request.headers });
+    if (!session || !['admin', 'talentManagement', 'hiringManager'].includes(session.user.role || '')) {
+        throw new Error('Unauthorized');
+    }
+
+    return await db.delete(applicants).where(eq(applicants.id, id)).returning();
+}
+
 export async function createApplicant(event: RequestEvent, data: { name: string; email: string; resumeUrl?: string; notes?: string }) {
     // Publicly accessible for now (e.g. from a career page), or restrict if internal only. 
     // For this task, let's assume internal creation by talent management or public apply.

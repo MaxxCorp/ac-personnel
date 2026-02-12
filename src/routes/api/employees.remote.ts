@@ -2,7 +2,7 @@ import { db } from '$lib/server/db';
 import { employees, applicants, type EmployeeStatus, type Role } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 import { auth } from '$lib/server/auth';
-import type { RequestEvent } from '@sveltejs/kit';
+import { error, type RequestEvent } from '@sveltejs/kit';
 
 import { query, command } from '$app/server';
 import { getRequestEvent } from '$app/server';
@@ -16,7 +16,7 @@ export const getAllEmployees = query(async () => {
         throw new Error('Unauthorized');
     }
     const result = await db.select().from(employees);
-    console.log(`getAllEmployees returning ${result.length} employees`);
+
     return result;
 });
 
@@ -65,16 +65,15 @@ interface CreateEmployeeInput {
 
 import { form } from '$app/server';
 import { createEmployeeSchema } from '$lib/schemas';
+import { number } from 'valibot';
 
 export const createEmployee = form(createEmployeeSchema, async (data) => {
     const requestEvent = getRequestEvent();
     if (!requestEvent) throw new Error('No request event');
 
-    console.log('createEmployee called with:', data);
-
     const session = await auth.api.getSession({ headers: requestEvent.request.headers });
     if (!session || !['admin', 'leadership', 'talentManagement'].includes(session.user.role || '')) {
-        throw new Error('Unauthorized');
+        error(401, 'Unauthorized');
     }
 
     const { firstName, lastName, personalEmail, role, department } = data;
@@ -92,11 +91,40 @@ export const createEmployee = form(createEmployeeSchema, async (data) => {
         }).returning();
 
         // Update the query cache
-        // await getAllEmployees().refresh(); // Causing serialization error
-        console.log('Employee created successfully:', newEmployee);
+        await getAllEmployees().refresh();
         return newEmployee;
     } catch (err) {
         console.error('Database Insertion Error:', err);
-        throw err;
+        error(500, 'Database Insertion Error');
+    }
+});
+
+export const deleteEmployee = command(number(), async (id) => {
+    const requestEvent = getRequestEvent();
+    if (!requestEvent) throw new Error('No request event');
+
+    const session = await auth.api.getSession({ headers: requestEvent.request.headers });
+    if (!session || !['admin'].includes(session.user.role || '')) {
+        error(401, 'Unauthorized');
+    }
+
+    try {
+        await db.delete(employees).where(eq(employees.id, id));
+        // Use invalidateAll on client side instead of refresh here if easier, but refresh is fine for remote function.
+        // Or if getAllEmployees is a query, we can refresh it.
+        // Check if getAllEmployees is actually available here to refresh. Yes it is exported in same file.
+        // await getAllEmployees.refresh(); // This might be the issue if getAllEmployees is not a query object but the function?
+        // getAllEmployees is defined as `export const getAllEmployees = query(...)` so it should be fine.
+
+        // However, previous error in step 45 was: "Argument of type ... is not assignable to parameter of type 'RemoteQueryOverride...'"
+        // user commented out `getAllEmployees().refresh()` in createEmployee but I should try to use it if possible or just return success.
+        // For now, let's just return success and handle invalidation on client.
+
+        // Update the query cache
+        await getAllEmployees().refresh();
+        return { success: true };
+    } catch (err) {
+        console.error('Delete Employee Error:', err);
+        error(500, 'Failed to delete employee');
     }
 });

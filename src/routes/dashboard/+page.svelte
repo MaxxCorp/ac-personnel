@@ -36,13 +36,13 @@
         },
         {
             title: "Applicants",
-            href: "/admin/applicants",
+            href: "/admin/recruiting",
             icon: UserPlus,
             desc: "Review and track job applications.",
         }, // Assuming path
         {
             title: "Time Tracking",
-            href: "/admin/time",
+            href: "/time",
             icon: Clock,
             desc: "View attendance and time logs.",
         }, // Assuming path

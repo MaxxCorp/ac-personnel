@@ -2,6 +2,7 @@
     import {
         getAllEmployees,
         createEmployee,
+        deleteEmployee,
     } from "../../api/employees.remote";
     import { createEmployeeSchema, roleOptions } from "$lib/schemas";
     import { onMount } from "svelte";
@@ -10,10 +11,9 @@
     import AsyncButton from "$lib/components/ui/button/AsyncButton.svelte";
     import * as Sheet from "$lib/components/ui/sheet";
     import DocumentManager from "$lib/components/documents/DocumentManager.svelte";
-    import { Eye, Plus } from "@lucide/svelte";
+    import { Eye, Plus, Trash2 } from "@lucide/svelte";
     import { Input } from "$lib/components/ui/input";
     import { Label } from "$lib/components/ui/label";
-    import * as Select from "$lib/components/ui/select";
     import { toast } from "svelte-sonner";
 
     // Remote function type
@@ -96,6 +96,33 @@
                                 >
                                     <Eye class="h-4 w-4" />
                                 </Button>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onclick={async () => {
+                                        if (
+                                            confirm(
+                                                `Are you sure you want to delete ${employee.firstName} ${employee.lastName}?`,
+                                            )
+                                        ) {
+                                            try {
+                                                // @ts-ignore
+                                                await deleteEmployee(
+                                                    employee.id,
+                                                );
+                                                toast.success(
+                                                    "Employee deleted successfully",
+                                                );
+                                            } catch (e) {
+                                                toast.error(
+                                                    "Failed to delete employee",
+                                                );
+                                            }
+                                        }
+                                    }}
+                                >
+                                    <Trash2 class="h-4 w-4 text-destructive" />
+                                </Button>
                             </Table.Cell>
                         </Table.Row>
                     {/each}
@@ -148,7 +175,6 @@
                         .preflight(createEmployeeSchema)
                         .enhance(async ({ form, submit }) => {
                             try {
-                                console.log("Submitting form...");
                                 // Use updates() to invalidate/refresh the getAllEmployees query
                                 // The result of updates() is the response from the server (often undefined or void if query refresh)
                                 // But createEmployee remote function returns the created employee or throws.
@@ -158,53 +184,10 @@
                                 // await submit();
                                 // If failed, createEmployee.error would be set.
 
-                                await submit().updates(getAllEmployees);
-
-                                // Check for error AFTER submit
-                                // @ts-ignore
-                                if (createEmployee.error) {
-                                    // @ts-ignore
-                                    console.error(
-                                        "Form submission returned error state:",
-                                        createEmployee.error,
-                                    );
-                                    // @ts-ignore
-                                    throw new Error(
-                                        createEmployee.error.message ||
-                                            "Unknown error from server",
-                                    );
-                                }
-
-                                console.log(
-                                    "Form submitted, updates triggered. Checking result...",
-                                );
-                                // Also check if result exists?
-                                // createEmployee.result should be populated on success
-
-                                // @ts-ignore
-                                if (
-                                    !createEmployee.result &&
-                                    !createEmployee.error
-                                ) {
-                                    console.warn(
-                                        "No result and no error? Possibly void return or issue.",
-                                    );
-                                }
+                                await submit();
 
                                 toast.success("Employee created successfully");
-                                addSheetOpen = false;
-
-                                // Re-fetch employees to update the local state
-                                console.log("Re-fetching employees...");
-                                // @ts-ignore
-                                const res = await getAllEmployees();
-                                console.log(
-                                    "Employees re-fetched:",
-                                    res ? res.length : "null",
-                                );
-                                employees = res;
-
-                                form.reset();
+                                (addSheetOpen = false), form.reset();
                             } catch (e: any) {
                                 console.error("Form submission error:", e);
                                 toast.error(
@@ -244,8 +227,10 @@
                                 {...createEmployee.fields.role.as("select")}
                             >
                                 {#each roleOptions as role}
-                                    <option value={role.value}
-                                        >{role.label}</option
+                                    <option
+                                        value={role.value}
+                                        selected={role.value === "employee" ||
+                                            undefined}>{role.label}</option
                                     >
                                 {/each}
                             </select>

@@ -2,6 +2,7 @@
     import {
         getApplicants,
         updateApplicantStatus,
+        deleteApplicant,
     } from "../../api/applicants.remote";
     import { onMount } from "svelte";
     import { flip } from "svelte/animate";
@@ -13,6 +14,7 @@
     import { Separator } from "$lib/components/ui/separator";
     import * as Sheet from "$lib/components/ui/sheet";
     import DocumentManager from "$lib/components/documents/DocumentManager.svelte";
+    import { toast } from "svelte-sonner";
 
     // Type definitons
     // @ts-ignore
@@ -183,6 +185,41 @@
                     />
                 </div>
             {/if}
+            <Sheet.Footer class="p-6 border-t mt-auto">
+                {#if selectedApplicant}
+                    <Button
+                        variant="destructive"
+                        onclick={async () => {
+                            if (
+                                confirm(
+                                    `Are you sure you want to delete ${selectedApplicant?.name}?`,
+                                )
+                            ) {
+                                try {
+                                    // @ts-ignore
+                                    await deleteApplicant(selectedApplicant.id);
+                                    toast.success(
+                                        "Applicant deleted successfully",
+                                    );
+                                    sheetOpen = false;
+                                    // Refresh list
+                                    // @ts-ignore
+                                    applicants = await getApplicants();
+                                    distributeApplicants();
+                                } catch (e) {
+                                    console.error(
+                                        "Failed to delete applicant",
+                                        e,
+                                    );
+                                    toast.error("Failed to delete applicant");
+                                }
+                            }
+                        }}
+                    >
+                        Delete Applicant
+                    </Button>
+                {/if}
+            </Sheet.Footer>
         </Sheet.Content>
     </Sheet.Root>
 </div>
